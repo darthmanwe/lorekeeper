@@ -522,14 +522,39 @@ class ExtractionPipeline:
 
     @staticmethod
     def _normalize_status(raw: str) -> str:
-        """Map LLM-returned status synonyms to the canonical Literal values."""
+        """Map LLM-returned status synonyms to the canonical Literal values.
+
+        Any status not in the canonical set or mapping is treated as "alive"
+        to prevent Pydantic validation failures on creative LLM outputs
+        like "wounded", "unconscious", "captured", etc.
+        """
+        canonical = {"alive", "dead", "unknown"}
+        if not raw:
+            return "alive"
+        lower = raw.lower().strip()
+        if lower in canonical:
+            return lower
         mapping = {
             "active": "alive",
             "living": "alive",
+            "healthy": "alive",
+            "wounded": "alive",
+            "injured": "alive",
+            "unconscious": "alive",
+            "captured": "alive",
+            "missing": "unknown",
+            "disappeared": "unknown",
+            "absent": "unknown",
             "deceased": "dead",
             "killed": "dead",
+            "slain": "dead",
+            "fallen": "dead",
+            "destroyed": "dead",
         }
-        return mapping.get(raw.lower(), raw.lower()) if raw else "alive"
+        normalized = mapping.get(lower, "alive")
+        if lower not in mapping:
+            logger.debug("Unmapped character status '%s' defaulted to 'alive'", raw)
+        return normalized
 
     def _commit_single(
         self, proposal: ExtractionProposal, branch_id: str, seq_id: int

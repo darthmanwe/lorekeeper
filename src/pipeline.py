@@ -23,6 +23,7 @@ from langchain_core.messages import HumanMessage, SystemMessage
 from langgraph.graph import END, StateGraph
 
 from src.extraction import ExtractionPipeline
+from src.guard import BranchManager, ContradictionGuard
 from src.prompts import get_prompt
 from src.retrieval import ContextAssembler, CypherRetriever, VectorRetriever, count_tokens
 from src.schema import (
@@ -76,7 +77,8 @@ class StoryPipeline:
         vector_retriever: VectorRetriever,
         extraction: ExtractionPipeline,
         llm: ChatAnthropic,
-        guard: Any | None = None,
+        guard: ContradictionGuard | None = None,
+        branch_manager: BranchManager | None = None,
     ) -> None:
         self._gc = graph_client
         self._cypher = cypher_retriever
@@ -84,10 +86,16 @@ class StoryPipeline:
         self._extraction = extraction
         self._llm = llm
         self._guard = guard
+        self._branch_mgr = branch_manager
         self._graph = self._build_graph()
 
     def _build_graph(self) -> StateGraph:
-        """Construct the LangGraph StateGraph with conditional routing."""
+        """Construct the LangGraph StateGraph with conditional routing.
+
+        The graph includes a post-generation guard re-check node for strict
+        mode. If blocking violations persist after generation and retries
+        are exhausted, a branch is created to isolate the divergent state.
+        """
         builder = StateGraph(PipelineState)
 
         builder.add_node("retrieve_graph", self._node_retrieve_graph)
@@ -95,6 +103,7 @@ class StoryPipeline:
         builder.add_node("assemble_context", self._node_assemble_context)
         builder.add_node("run_guard", self._node_run_guard)
         builder.add_node("generate", self._node_generate)
+        builder.add_node("post_generate_check", self._node_post_generate_check)
         builder.add_node("extract_and_commit", self._node_extract_and_commit)
 
         builder.set_entry_point("retrieve_graph")
@@ -102,10 +111,15 @@ class StoryPipeline:
         builder.add_edge("retrieve_vector", "assemble_context")
         builder.add_edge("assemble_context", "run_guard")
         builder.add_edge("run_guard", "generate")
+        builder.add_edge("generate", "post_generate_check")
         builder.add_conditional_edges(
-            "generate",
+            "post_generate_check",
             self._route_after_generate,
-            {"extract": "extract_and_commit", "end": END},
+            {
+                "extract": "extract_and_commit",
+                "retry": "generate",
+                "end": END,
+            },
         )
         builder.add_edge("extract_and_commit", END)
 
@@ -164,11 +178,20 @@ class StoryPipeline:
         return {"assembled_prompt": sections}
 
     def _node_run_guard(self, state: PipelineState) -> dict[str, Any]:
-        """Run contradiction guard checks (no-op until P4 wires the guard)."""
+        """Run contradiction guard checks and inject violations into context.
+
+        In permissive mode, violations are injected into the prompt but
+        never block generation. In strict mode, blocking violations
+        (Critical/Major) will trigger retries in the generate node.
+        """
         if self._guard is None:
             return {"violations": []}
 
         session: SessionState = state["session"]
+
+        if session.mode == "baseline":
+            return {"violations": []}
+
         violations = self._guard.run_all_checks(session)
         logger.info("Guard check: %d violations found", len(violations))
 
@@ -247,16 +270,70 @@ class StoryPipeline:
         )
         return {"extraction_result": result}
 
+    _MAX_STRICT_RETRIES = 2
+
+    def _node_post_generate_check(self, state: PipelineState) -> dict[str, Any]:
+        """Post-generation guard re-check for strict mode retry logic.
+
+        In strict mode, if the generated text still triggers blocking
+        violations (Critical/Major), increment retry_count and signal
+        a retry. After _MAX_STRICT_RETRIES, create a branch to isolate
+        the divergent state and proceed with the generated text as-is.
+
+        In permissive mode or baseline mode, this is a pass-through.
+        """
+        session: SessionState = state["session"]
+
+        if session.mode == "baseline" or self._guard is None:
+            return {}
+
+        if self._guard.mode != "strict":
+            return {}
+
+        violations = state.get("violations", [])
+        if not self._guard.has_blocking_violations(violations):
+            return {}
+
+        retry_count = state.get("retry_count", 0)
+        if retry_count >= self._MAX_STRICT_RETRIES:
+            if self._branch_mgr:
+                blocking = [v for v in violations if v.severity in ("critical", "major")]
+                reason = f"Unresolved after {retry_count} retries: {blocking[0].violation_message}"
+                new_branch = self._branch_mgr.create_branch(session, reason)
+                logger.warning(
+                    "Strict mode: max retries exhausted, branched to %s", new_branch
+                )
+            else:
+                logger.warning(
+                    "Strict mode: max retries exhausted, no branch manager — proceeding with violations"
+                )
+            return {}
+
+        logger.info(
+            "Strict mode: blocking violations detected, retry %d/%d",
+            retry_count + 1, self._MAX_STRICT_RETRIES,
+        )
+        return {"retry_count": retry_count + 1}
+
     # ------------------------------------------------------------------
     # Routing
     # ------------------------------------------------------------------
 
-    @staticmethod
-    def _route_after_generate(state: PipelineState) -> str:
-        """Route to extraction (NKGE) or directly to END (baseline)."""
+    def _route_after_generate(self, state: PipelineState) -> str:
+        """Route after post-generate check: extract, retry, or end."""
         session: SessionState = state["session"]
+
         if session.mode == "baseline":
             return "end"
+
+        if (
+            self._guard is not None
+            and self._guard.mode == "strict"
+            and self._guard.has_blocking_violations(state.get("violations", []))
+            and state.get("retry_count", 0) < self._MAX_STRICT_RETRIES
+        ):
+            return "retry"
+
         return "extract"
 
     # ------------------------------------------------------------------
