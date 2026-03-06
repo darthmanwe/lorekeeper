@@ -33,6 +33,15 @@ from src.schema import (
     Segment,
     SessionState,
 )
+from src.tracing import (
+    record_extraction_metrics,
+    record_generation_metrics,
+    record_guard_metrics,
+    record_retrieval_metrics,
+    trace_segment_cycle,
+)
+
+from opentelemetry import trace as otel_trace
 
 logger = logging.getLogger(__name__)
 
@@ -411,5 +420,48 @@ class StoryPipeline:
             "persona_docs": [],
         }
 
-        result = self._graph.invoke(initial_state)
-        return result
+        next_seq = session.last_segment_seq_id + 1
+        with trace_segment_cycle(
+            seq_id=next_seq,
+            branch_id=session.active_branch_id,
+            mode=session.mode,
+            player_action=player_action,
+        ) as span:
+            result = self._graph.invoke(initial_state)
+            self._record_cycle_telemetry(span, result)
+            return result
+
+    def _record_cycle_telemetry(
+        self, span: otel_trace.Span, result: PipelineState
+    ) -> None:
+        """Record aggregate telemetry on the cycle span from the final state."""
+        record_retrieval_metrics(
+            span,
+            graph_tokens=result.get("graph_context_tokens", 0),
+            vector_tokens=result.get("vector_context_tokens", 0),
+        )
+        violations = result.get("violations", [])
+        sev_counts: dict[str, int] = {}
+        for v in violations:
+            sev = v.severity if isinstance(v, ConstraintViolation) else str(v.get("severity", ""))
+            sev_counts[sev] = sev_counts.get(sev, 0) + 1
+        record_guard_metrics(
+            span,
+            violation_count=len(violations),
+            severities=sev_counts if sev_counts else None,
+        )
+        generated = result.get("generated_text", "")
+        record_generation_metrics(
+            span,
+            output_tokens=count_tokens(generated),
+            retry_count=result.get("retry_count", 0),
+        )
+        ext = result.get("extraction_result")
+        if ext is not None:
+            record_extraction_metrics(
+                span,
+                proposed=len(ext.proposals),
+                approved=len(ext.approved),
+                flagged=len(ext.flagged),
+                committed=ext.committed_count,
+            )

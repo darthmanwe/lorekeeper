@@ -518,6 +518,55 @@ class GraphClient:
     # Read helpers
     # ------------------------------------------------------------------
 
+    def enrich_structural_edges(self, branch_id: str) -> dict[str, int]:
+        """Batch-create structural edges from node properties.
+
+        Scans all Characters and Objects and creates edges that should exist
+        based on their property values but are missing as actual relationships.
+        Useful for retroactive enrichment or after seed ingestion.
+
+        Returns:
+            Dict with counts of edges created per type.
+        """
+        counts: dict[str, int] = {"LOCATED_AT": 0, "OWNS": 0}
+
+        char_q = """
+        MATCH (c:Character)
+        WHERE c.current_location_id IS NOT NULL
+          AND NOT (c)-[:LOCATED_AT]->(:Location {name: c.current_location_id})
+        MATCH (l:Location {name: c.current_location_id})
+        MERGE (c)-[r:LOCATED_AT]->(l)
+        SET r.branch_id = $branch_id
+        RETURN c.name AS char_name, l.name AS loc_name
+        """
+        with self._driver.session(database=self._database) as session:
+            for r in session.run(char_q, {"branch_id": branch_id}):
+                counts["LOCATED_AT"] += 1
+                logger.info(
+                    "Enriched: %s -[:LOCATED_AT]-> %s",
+                    r["char_name"], r["loc_name"],
+                )
+
+        obj_q = """
+        MATCH (o:Object)
+        WHERE o.current_owner_id IS NOT NULL
+          AND NOT (:Character {name: o.current_owner_id})-[:OWNS]->(o)
+        MATCH (c:Character {name: o.current_owner_id})
+        MERGE (c)-[r:OWNS]->(o)
+        SET r.branch_id = $branch_id
+        RETURN c.name AS owner, o.name AS obj_name
+        """
+        with self._driver.session(database=self._database) as session:
+            for r in session.run(obj_q, {"branch_id": branch_id}):
+                counts["OWNS"] += 1
+                logger.info(
+                    "Enriched: %s -[:OWNS]-> %s",
+                    r["owner"], r["obj_name"],
+                )
+
+        logger.info("Structural enrichment: %s", counts)
+        return counts
+
     def get_characters_at_location(
         self, location: str, branch_id: str
     ) -> list[Character]:

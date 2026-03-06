@@ -295,30 +295,27 @@ class ExtractionPipeline:
             except Exception:
                 logger.exception("Failed to create REFERENCES_GRAPH_STATE links")
 
-        if committed_events:
-            self._auto_link_events(committed_events, approved, branch_id)
+        self._auto_link_all(committed_events, approved, branch_id)
 
         return committed
 
-    def _auto_link_events(
+    def _auto_link_all(
         self,
         committed_events: list[tuple[int, str]],
         all_approved: list[ExtractionProposal],
         branch_id: str,
     ) -> None:
-        """Deterministic post-commit linking for events.
+        """Deterministic post-commit structural edge creation.
 
-        For each committed event:
-        1. Find character names mentioned in the event description (from
-           both the current extraction batch and the full graph).
-        2. Create PARTICIPATED_IN edges.
-        3. Create a CAUSED_BY edge to the previous event in the branch.
+        Runs after all proposals in a batch are committed so target nodes
+        already exist. Creates edges that mirror property values:
+        - Event: PARTICIPATED_IN (characters mentioned in description) + CAUSED_BY
+        - Character: LOCATED_AT (from current_location_id property)
+        - Object: OWNS (from current_owner_id property)
         """
         all_char_names = self._gc.get_all_character_names(branch_id)
         batch_char_names = {
-            p.entity_name
-            for p in all_approved
-            if p.entity_type == "Character"
+            p.entity_name for p in all_approved if p.entity_type == "Character"
         }
         all_char_names = list(set(all_char_names) | batch_char_names)
 
@@ -330,8 +327,48 @@ class ExtractionPipeline:
                 self._gc.link_event_participants(
                     evt_seq_id, branch_id, participants
                 )
-
             self._gc.link_event_causality(evt_seq_id, branch_id)
+
+        for p in all_approved:
+            if p.entity_type == "Character":
+                loc = p.properties.get("current_location_id")
+                if loc:
+                    rel = Relationship(
+                        type="LOCATED_AT",
+                        source=p.entity_name,
+                        target=loc,
+                    )
+                    try:
+                        self._gc.merge_relationship(rel, branch_id)
+                        logger.info(
+                            "Auto-linked %s -[:LOCATED_AT]-> %s",
+                            p.entity_name, loc,
+                        )
+                    except Exception:
+                        logger.warning(
+                            "Failed to auto-link LOCATED_AT: %s -> %s",
+                            p.entity_name, loc,
+                        )
+
+            elif p.entity_type == "Object":
+                owner = p.properties.get("current_owner_id")
+                if owner:
+                    rel = Relationship(
+                        type="OWNS",
+                        source=owner,
+                        target=p.entity_name,
+                    )
+                    try:
+                        self._gc.merge_relationship(rel, branch_id)
+                        logger.info(
+                            "Auto-linked %s -[:OWNS]-> %s",
+                            owner, p.entity_name,
+                        )
+                    except Exception:
+                        logger.warning(
+                            "Failed to auto-link OWNS: %s -> %s",
+                            owner, p.entity_name,
+                        )
 
     @staticmethod
     def _find_mentioned_characters(
