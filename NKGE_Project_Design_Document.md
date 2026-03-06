@@ -18,9 +18,8 @@
 7. [Prompt Engineering Contracts](#7-prompt-engineering-contracts)
 8. [Branching and Session State](#8-branching-and-session-state)
 9. [README Construction Guide](#9-readme-construction-guide)
-10. [Portfolio and Interview Positioning](#10-portfolio-and-interview-positioning)
-11. [Appendix A: Cypher Query Reference](#appendix-a-cypher-query-reference)
-12. [Appendix B: Evaluation Run Output Schema](#appendix-b-evaluation-run-output-schema)
+10. [Appendix A: Cypher Query Reference](#appendix-a-cypher-query-reference)
+11. [Appendix B: Evaluation Run Output Schema](#appendix-b-evaluation-run-output-schema)
 
 ---
 
@@ -531,28 +530,6 @@ flowchart TD
     K --> J
     J --> L[Eval Harness]
 ```
-
----
-
-## 10. Portfolio and Interview Positioning
-
-### 10.1 How This Project Closes CV Gaps
-
-| Hiring Signal | Prior Portfolio Evidence | This Project Adds |
-|--------------|------------------------|-------------------|
-| Production graph RAG | Medical Knowledge Graph (retrieval only) | Read-write loop with extraction, validation, and contradiction guard |
-| Evaluation and regression | Mentioned in CV but no public artifact | Reproducible eval harness with paired comparison and published results |
-| LLM governance patterns | Lore Machine hallucination mitigation | Propose-validate-commit graph write governance, prompt versioning |
-| Agent state management | LangGraph mentioned in CV | Typed LangGraph state with branching, session persistence, observability |
-| Product sensibility | Founding engineer experience stated | Working Streamlit frontend with live graph visualization |
-
-### 10.2 Key Talking Points for data2.ai Interviews
-
-- The contradiction guard is architecturally equivalent to data2.ai's separation of evidence and question graphs — both exist to prevent poisoned context from corrupting generation.
-- The propose-validate-commit write-back loop mirrors the governance model described in data2.ai's public technical content around their Arctic Loader ingestion pipeline.
-- The paired evaluation design with LLM judge produces the kind of defensible accuracy numbers — with methodology — that enterprise customers need before trusting a generative system on real content.
-- The branch-tagged graph with causal `CAUSED_BY` chains enables the same provenance and explainability story that data2.ai emphasizes as a differentiator over traditional RAG.
-- The prompt versioning registry with mandatory re-evaluation before merge is a direct translation of MLOps regression suite discipline to the prompt engineering domain.
 
 ---
 
