@@ -16,6 +16,7 @@ build/
 
 # ChromaDB local persistence
 chroma_store/
+chroma_store_*/
 
 # Eval runs (keep samples for README)
 eval_runs/*

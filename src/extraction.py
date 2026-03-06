@@ -246,6 +246,10 @@ class ExtractionPipeline:
     ) -> int:
         """Write approved proposals to Neo4j via MERGE, then create REFERENCES_GRAPH_STATE links.
 
+        After committing entity nodes, performs deterministic event linking:
+        - PARTICIPATED_IN: characters mentioned in an event description
+        - CAUSED_BY: chain to the previous event in the same branch
+
         Args:
             approved: Validated proposals to commit.
             branch_id: Active branch ID.
@@ -256,11 +260,17 @@ class ExtractionPipeline:
         """
         committed = 0
         referenced_names: list[str] = []
+        committed_events: list[tuple[int, str]] = []
 
         for proposal in approved:
             try:
                 self._commit_single(proposal, branch_id, seq_id)
                 committed += 1
+                if proposal.entity_type == "Event":
+                    desc = proposal.properties.get(
+                        "description", proposal.entity_name
+                    )
+                    committed_events.append((seq_id, desc))
                 if proposal.entity_type != "Relationship":
                     referenced_names.append(proposal.entity_name)
                 else:
@@ -285,7 +295,54 @@ class ExtractionPipeline:
             except Exception:
                 logger.exception("Failed to create REFERENCES_GRAPH_STATE links")
 
+        if committed_events:
+            self._auto_link_events(committed_events, approved, branch_id)
+
         return committed
+
+    def _auto_link_events(
+        self,
+        committed_events: list[tuple[int, str]],
+        all_approved: list[ExtractionProposal],
+        branch_id: str,
+    ) -> None:
+        """Deterministic post-commit linking for events.
+
+        For each committed event:
+        1. Find character names mentioned in the event description (from
+           both the current extraction batch and the full graph).
+        2. Create PARTICIPATED_IN edges.
+        3. Create a CAUSED_BY edge to the previous event in the branch.
+        """
+        all_char_names = self._gc.get_all_character_names(branch_id)
+        batch_char_names = {
+            p.entity_name
+            for p in all_approved
+            if p.entity_type == "Character"
+        }
+        all_char_names = list(set(all_char_names) | batch_char_names)
+
+        for evt_seq_id, evt_desc in committed_events:
+            participants = self._find_mentioned_characters(
+                evt_desc, all_char_names
+            )
+            if participants:
+                self._gc.link_event_participants(
+                    evt_seq_id, branch_id, participants
+                )
+
+            self._gc.link_event_causality(evt_seq_id, branch_id)
+
+    @staticmethod
+    def _find_mentioned_characters(
+        text: str, character_names: list[str]
+    ) -> list[str]:
+        """Return character names that appear in the text (case-insensitive)."""
+        text_lower = text.lower()
+        return [
+            name for name in character_names
+            if name.lower() in text_lower
+        ]
 
     def run(
         self,

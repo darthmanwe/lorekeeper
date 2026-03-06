@@ -40,6 +40,26 @@
       "eval_run_id": null,
       "promoted_to_main": true,
       "promoted_at": "2026-03-06T00:00:00Z"
+    },
+    {
+      "prompt_id": "judge_contradiction_v1",
+      "prompt_function": "eval.JUDGE_CONTRADICTION_SYSTEM",
+      "changed_sections": ["initial"],
+      "change_reason": "LLM judge prompt for contradiction detection — evaluates generated segments against structured graph facts per Section 5.3",
+      "breaking_change": false,
+      "eval_run_id": null,
+      "promoted_to_main": true,
+      "promoted_at": "2026-03-06T00:00:00Z"
+    },
+    {
+      "prompt_id": "judge_coherence_v1",
+      "prompt_function": "eval.JUDGE_COHERENCE_SYSTEM",
+      "changed_sections": ["initial"],
+      "change_reason": "LLM judge prompt for coherence scoring (1-5) — evaluates narrative flow and logical continuity per Section 5.4",
+      "breaking_change": false,
+      "eval_run_id": null,
+      "promoted_to_main": true,
+      "promoted_at": "2026-03-06T00:00:00Z"
     }
   ]
 }

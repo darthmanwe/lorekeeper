@@ -430,6 +430,90 @@ class GraphClient:
                         f"Failed to link segment {segment_seq_id} to node '{name}'"
                     ) from exc
 
+    def link_event_participants(
+        self,
+        seq_id: int,
+        branch_id: str,
+        character_names: list[str],
+    ) -> int:
+        """Create PARTICIPATED_IN edges from characters to an event.
+
+        Uses MERGE to remain idempotent. Characters that don't exist in the
+        graph are silently skipped.
+
+        Returns:
+            Number of PARTICIPATED_IN edges created or matched.
+        """
+        if not character_names:
+            return 0
+        query = """
+        MATCH (e:Event {seq_id: $seq_id, branch_id: $branch_id})
+        MATCH (c:Character {name: $char_name})
+        MERGE (c)-[r:PARTICIPATED_IN]->(e)
+        SET r.branch_id = $branch_id
+        RETURN c.name AS linked
+        """
+        linked = 0
+        with self._driver.session(database=self._database) as session:
+            for name in character_names:
+                try:
+                    result = session.run(query, {
+                        "seq_id": seq_id,
+                        "branch_id": branch_id,
+                        "char_name": name,
+                    })
+                    if result.single():
+                        linked += 1
+                except Exception:
+                    logger.warning(
+                        "Failed to link character '%s' to event %d", name, seq_id
+                    )
+        logger.info(
+            "Linked %d/%d characters to Event #%d",
+            linked, len(character_names), seq_id,
+        )
+        return linked
+
+    def link_event_causality(
+        self,
+        seq_id: int,
+        branch_id: str,
+    ) -> bool:
+        """Create a CAUSED_BY edge from this event to the immediately previous
+        event in the same branch. Skips if seq_id <= 1 or no predecessor exists.
+
+        Returns:
+            True if a CAUSED_BY edge was created/matched, False otherwise.
+        """
+        if seq_id <= 1:
+            return False
+        query = """
+        MATCH (curr:Event {seq_id: $seq_id, branch_id: $branch_id})
+        MATCH (prev:Event {branch_id: $branch_id})
+        WHERE prev.seq_id < $seq_id
+        WITH curr, prev ORDER BY prev.seq_id DESC LIMIT 1
+        MERGE (curr)-[r:CAUSED_BY]->(prev)
+        SET r.branch_id = $branch_id
+        RETURN prev.seq_id AS prev_seq
+        """
+        try:
+            with self._driver.session(database=self._database) as session:
+                result = session.run(query, {
+                    "seq_id": seq_id,
+                    "branch_id": branch_id,
+                })
+                record = result.single()
+                if record:
+                    logger.info(
+                        "Linked Event #%d -> CAUSED_BY -> Event #%d",
+                        seq_id, record["prev_seq"],
+                    )
+                    return True
+                return False
+        except Exception:
+            logger.warning("Failed to create CAUSED_BY for event %d", seq_id)
+            return False
+
     # ------------------------------------------------------------------
     # Read helpers
     # ------------------------------------------------------------------
@@ -482,6 +566,17 @@ class GraphClient:
         with self._driver.session(database=self._database) as session:
             result = session.run(query, params)
             return [self._record_to_event(r["e"]) for r in result]
+
+    def get_all_character_names(self, branch_id: str) -> list[str]:
+        """Return all Character names in the graph for event participant matching."""
+        query = """
+        MATCH (c:Character)
+        WHERE c.branch_id = $branch_id OR c.branch_id IS NULL
+        RETURN DISTINCT c.name AS name
+        """
+        with self._driver.session(database=self._database) as session:
+            result = session.run(query, {"branch_id": branch_id})
+            return [r["name"] for r in result]
 
     def get_all_entity_names(self, branch_id: str) -> list[str]:
         """Return all entity names in the graph for fuzzy matching.

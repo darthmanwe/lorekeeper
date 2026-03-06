@@ -8,7 +8,7 @@ All models use Pydantic v2 syntax exclusively.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Any, Literal
 
 from pydantic import BaseModel, Field, field_validator, model_validator
@@ -285,6 +285,6 @@ class EvalRunOutput(BaseModel):
     run_id: str
     mode: Literal["nkge", "baseline"]
     story_seed: str
-    created_at: str = Field(default_factory=lambda: datetime.utcnow().isoformat())
+    created_at: str = Field(default_factory=lambda: datetime.now(UTC).isoformat())
     segments: list[SegmentEvalRecord] = Field(default_factory=list)
     summary: EvalRunSummary = Field(default_factory=EvalRunSummary)
