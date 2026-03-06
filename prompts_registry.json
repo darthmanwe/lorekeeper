@@ -1,0 +1,25 @@
+{
+  "registry_version": "1.0",
+  "prompts": [
+    {
+      "prompt_id": "extraction_v1",
+      "prompt_function": "EXTRACTION_PROMPT_V1",
+      "changed_sections": ["initial"],
+      "change_reason": "Initial extraction prompt for two-stage pipeline",
+      "breaking_change": false,
+      "eval_run_id": null,
+      "promoted_to_main": true,
+      "promoted_at": "2026-03-06T00:00:00Z"
+    },
+    {
+      "prompt_id": "reclassification_v1",
+      "prompt_function": "RECLASSIFICATION_PROMPT_V1",
+      "changed_sections": ["initial"],
+      "change_reason": "Initial reclassification prompt for schema evolution pass",
+      "breaking_change": false,
+      "eval_run_id": null,
+      "promoted_to_main": true,
+      "promoted_at": "2026-03-06T00:00:00Z"
+    }
+  ]
+}

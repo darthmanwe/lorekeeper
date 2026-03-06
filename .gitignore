@@ -1,3 +1,29 @@
-cursor_plan_prompt.md
-NKGE_Project_Design_Document.md
+# Environment
+.env
 .env copy
+.venv/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+dist/
+build/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# ChromaDB local persistence
+chroma_store/
+
+# Eval runs (keep samples for README)
+eval_runs/*
+!eval_runs/samples/
+
+# IDE
+.vscode/
+
+# Plan / prompt files (dev-only)
+cursor_plan_prompt.md
+study_packet.md
