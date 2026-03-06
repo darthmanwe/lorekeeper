@@ -6,7 +6,7 @@
 ![Neo4j 5.x](https://img.shields.io/badge/Neo4j-5.x-008CC1?logo=neo4j&logoColor=white)
 ![License MIT](https://img.shields.io/badge/License-MIT-green)
 ![137 Tests Passing](https://img.shields.io/badge/Tests-137%20passing-brightgreen)
-![Eval: 0 Contradictions](https://img.shields.io/badge/Eval-0%20contradictions-success)
+![Eval: 61% fewer contradictions](https://img.shields.io/badge/Eval-61%25%20fewer%20contradictions-success)
 
 ---
 
@@ -16,7 +16,7 @@ LLMs write great narrative text, but they have no memory. Run a multi-turn story
 
 Lorekeeper fixes this with a **read-write knowledge graph loop**. After each generated segment, an extraction pipeline pulls entities (characters, locations, events, objects) into a Neo4j property graph. Before the *next* generation, the system retrieves relevant facts from that graph and injects them as hard constraints into the prompt. A **contradiction guard** runs 5 Cypher-backed checks and warns the LLM before it writes, not after.
 
-In a 5-segment paired evaluation against a rolling-text baseline, Lorekeeper produced **zero contradictions** while the baseline introduced a Major one. The graph isn't just storage; it's actively steering the LLM away from inconsistent output.
+In a 20-segment paired evaluation against a rolling-text baseline, Lorekeeper cut contradiction scores by **61%** (1.70 vs 4.35 mean weighted score). The baseline accumulated 3 Critical and 36 Major contradictions; NKGE held at 1 Critical and 14 Major. The longer the story runs, the wider the gap grows. The graph isn't just storage; it's actively steering the LLM away from inconsistent output.
 
 ---
 
@@ -35,32 +35,33 @@ A few of the bigger decisions behind this design:
 
 ## Evaluation Results
 
-Same player actions, same seed story, 5 segments. NKGE vs. a rolling-text baseline that keeps the last 3 segments as context (which is how many production systems actually work, not a strawman).
+Same player actions, same seed story, 20 segments across a 4-act narrative arc. NKGE vs. a rolling-text baseline that keeps the last 3 segments as context (which is how many production systems actually work, not a strawman).
 
 | Metric | Baseline | NKGE | Delta |
 |--------|----------|------|-------|
-| **Mean Contradiction Score** | 0.40 | **0.00** | **-100%** |
-| Critical Contradictions | 0 | 0 | — |
-| Major Contradictions | 1 | **0** | -100% |
-| Mean Coherence (1-5) | 5.00 | 4.40 | -0.60 |
-| Graph Coverage Rate | — | 100% | — |
-| Retrieval Precision | 69.1% | **76.9%** | +7.8pp |
-| Graph Nodes Created | 0 | 26 | +26 |
-| Graph Relationships Created | 0 | 28 | +28 |
+| **Mean Contradiction Score** | 4.35 | **1.70** | **-61%** |
+| Critical Contradictions | 3 | **1** | -2 |
+| Major Contradictions | 36 | **14** | -22 |
+| Minor Contradictions | 6 | 3 | -3 |
+| Mean Coherence (1-5) | 4.00 | 3.80 | -0.20 |
+| Graph Coverage Rate | 100% | 100% | — |
+| Retrieval Precision | 2.5% | **67.3%** | +64.8pp |
+| Graph Nodes Created | 0 | 102 | +102 |
+| Graph Relationships Created | 0 | 194 | +194 |
 
-The baseline hit a **Major** contradiction in segment 3 (weighted score 2.0). NKGE stayed clean across all five segments.
+The baseline degraded steadily over 20 segments, averaging a contradiction score of 4.35 per segment with 3 Critical failures (dead characters acting, impossible object states). NKGE held at 1.70 mean, with 8 out of 20 segments fully clean. The gap between the two systems widened as the story grew more complex, which is exactly what graph memory is designed to address.
 
-The -0.60 coherence drop is expected: guard constraints can limit creative freedom. That's a tunable dial, not a bug. We track it explicitly so the trade-off is visible.
+The coherence trade-off is small: -0.20 points. At 5 segments it was -0.60, meaning the system's coherence actually improves relative to baseline as it accumulates more graph context. That's a tunable dial, not a defect.
 
 > Full methodology, severity weights, and reproduction steps are in the [design document](./NKGE_Project_Design_Document.md).
 
 ### Evaluation Visualizations
 
-Per-segment contradiction scores side by side. The baseline spikes at segment 2 with a Major contradiction (weighted 2.0); NKGE stays flat at zero:
+Per-segment contradiction scores across all 20 segments. The baseline (red) stays consistently high and gets worse in the later acts as the story accumulates more facts to potentially violate. NKGE (green) stays mostly below the baseline, with 8 fully clean segments:
 
 ![Contradiction Comparison](assets/eval_contradiction_comparison.png)
 
-The radar chart below shows the full trade-off profile. NKGE wins on consistency, graph coverage, and retrieval precision. The coherence gap is the cost of enforcing constraints, and it's small enough to be worth the trade:
+The radar chart below shows the full trade-off profile across four dimensions. NKGE dominates on consistency and retrieval precision, matches on graph coverage, and trades a small amount of coherence for factual accuracy:
 
 ![Metrics Radar](assets/eval_metrics_radar.png)
 
@@ -188,7 +189,6 @@ lorekeeper/
 ├── app.py                 # Streamlit interactive frontend
 ├── api.py                 # FastAPI REST API (6 endpoints, OpenAPI docs)
 ├── prompts_registry.json  # Prompt version governance registry
-├── study_packet.md        # Technical study guide with concepts, decisions, and Q&A
 ├── NKGE_Project_Design_Document.md  # Full system design document
 ├── requirements.txt
 └── .env.example
@@ -266,7 +266,7 @@ Some of the opinions baked in:
 - The extraction pipeline treats LLM output as **untrusted input** with multi-stage JSON recovery and deterministic validation
 - Environmental detail objects (things like "morning mist" or "hoofprints") get extracted and stored but intentionally remain structurally unlinked; that's correct behavior, not a gap
 
-The full design rationale is in the [design document](./NKGE_Project_Design_Document.md). The [study packet](./study_packet.md) covers the concepts, design decisions, and interview-ready Q&A behind each phase.
+The full design rationale is in the [design document](./NKGE_Project_Design_Document.md).
 
 ---
 
