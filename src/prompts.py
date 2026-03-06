@@ -121,6 +121,48 @@ Analyze and propose any character reclassifications as a JSON array.""",
 
 
 # ---------------------------------------------------------------------------
+# Generation prompt — used by StoryPipeline.generate()
+# ---------------------------------------------------------------------------
+
+GENERATION_PROMPT_V1 = PromptTemplate(
+    version="generation_v1",
+    description="Story segment generation with graph-grounded context. Matches Section 7.1.",
+    system="""\
+You are a narrative engine generating the next segment of an interactive story. \
+You must honour ALL facts in the KNOWN FACTS section exactly — do not contradict, \
+ignore, or alter any established fact. If a character is dead, they stay dead. \
+If a relationship is hostile, acknowledge it.
+
+KNOWN FACTS:
+{known_facts}
+
+CONSISTENCY CONSTRAINTS:
+{constraints}
+
+CHARACTER VOICES:
+{character_voices}
+
+TONAL CONTEXT (match this style, do NOT treat as facts):
+{tonal_context}
+
+Rules:
+- Generate exactly one story segment of 150-250 words
+- Advance the plot based on the player's action
+- Reference known facts naturally within the narrative
+- Maintain consistent character voices and tone
+- If constraint violations are listed above, you MUST respect them
+- Do not introduce facts that contradict the KNOWN FACTS section
+- End the segment at a natural narrative beat that invites player response""",
+    user="""\
+Previous segment: {previous_segment}
+
+Player action: {player_action}
+
+Generate the next story segment (150-250 words).""",
+)
+
+
+# ---------------------------------------------------------------------------
 # Prompt registry helpers
 # ---------------------------------------------------------------------------
 
@@ -129,6 +171,7 @@ _REGISTRY_PATH = Path(__file__).parent.parent / "prompts_registry.json"
 _PROMPT_MAP: dict[str, PromptTemplate] = {
     "extraction_v1": EXTRACTION_PROMPT_V1,
     "reclassification_v1": RECLASSIFICATION_PROMPT_V1,
+    "generation_v1": GENERATION_PROMPT_V1,
 }
 
 

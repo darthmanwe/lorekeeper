@@ -20,6 +20,16 @@
       "eval_run_id": null,
       "promoted_to_main": true,
       "promoted_at": "2026-03-06T00:00:00Z"
+    },
+    {
+      "prompt_id": "generation_v1",
+      "prompt_function": "GENERATION_PROMPT_V1",
+      "changed_sections": ["initial"],
+      "change_reason": "Initial generation prompt matching Section 7.1 — Known Facts, Constraints, Character Voices, Tonal Context sections with explicit anti-contradiction instructions",
+      "breaking_change": false,
+      "eval_run_id": null,
+      "promoted_to_main": true,
+      "promoted_at": "2026-03-06T00:00:00Z"
     }
   ]
 }

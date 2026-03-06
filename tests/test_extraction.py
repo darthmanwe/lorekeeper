@@ -292,3 +292,39 @@ class TestParseProposals:
         content = '[{"entity_type": "Character", "entity_name": "Kael", "confidence": 0.9, "properties": {}}, {"bad": "item"}]'
         proposals = pipeline._parse_proposals(content)
         assert len(proposals) == 1
+
+    def test_parse_truncated_json_repaired(self) -> None:
+        """LLM output truncated mid-string — parser should recover partial items."""
+        pipeline = self._make_pipeline()
+        content = (
+            '[{"entity_type": "Character", "entity_name": "Kael", '
+            '"confidence": 0.9, "properties": {}}, '
+            '{"entity_type": "Location", "entity_name": "Dark For'
+        )
+        proposals = pipeline._parse_proposals(content)
+        assert len(proposals) >= 1
+        assert proposals[0].entity_name == "Kael"
+
+    def test_parse_trailing_comma_handled(self) -> None:
+        pipeline = self._make_pipeline()
+        content = '[{"entity_type": "Character", "entity_name": "Aria", "confidence": 0.85, "properties": {}},]'
+        proposals = pipeline._parse_proposals(content)
+        assert len(proposals) == 1
+
+    def test_parse_no_json_returns_empty(self) -> None:
+        pipeline = self._make_pipeline()
+        content = "I could not find any entities in this text."
+        proposals = pipeline._parse_proposals(content)
+        assert len(proposals) == 0
+
+    def test_parse_json_with_preamble(self) -> None:
+        """LLM wraps JSON in explanatory text — parser should extract the array."""
+        pipeline = self._make_pipeline()
+        content = (
+            'Here are the extracted entities:\n\n'
+            '[{"entity_type": "Character", "entity_name": "Brann", '
+            '"confidence": 0.92, "properties": {"status": "alive"}}]'
+        )
+        proposals = pipeline._parse_proposals(content)
+        assert len(proposals) == 1
+        assert proposals[0].entity_name == "Brann"

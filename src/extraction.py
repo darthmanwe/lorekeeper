@@ -397,8 +397,13 @@ class ExtractionPipeline:
 
     @staticmethod
     def _parse_json_response(content: str) -> Any:
-        """Extract and parse JSON from an LLM response, handling markdown fences."""
+        """Extract and parse JSON from an LLM response with robust error recovery.
+
+        Handles: markdown fences, truncated strings, trailing commas,
+        partial arrays, and other common LLM output malformations.
+        """
         text = content.strip()
+
         if text.startswith("```"):
             lines = text.split("\n")
             start = 1
@@ -408,7 +413,112 @@ class ExtractionPipeline:
                     end = i
                     break
             text = "\n".join(lines[start:end])
-        return json.loads(text)
+
+        try:
+            return json.loads(text)
+        except json.JSONDecodeError:
+            pass
+
+        bracket_start = text.find("[")
+        brace_start = text.find("{")
+        if bracket_start == -1 and brace_start == -1:
+            logger.warning("No JSON array or object found in LLM response")
+            return []
+
+        if bracket_start != -1 and (brace_start == -1 or bracket_start < brace_start):
+            text = text[bracket_start:]
+        elif brace_start != -1:
+            text = text[brace_start:]
+
+        import re
+        text = re.sub(r",\s*([}\]])", r"\1", text)
+
+        bracket_depth = 0
+        brace_depth = 0
+        in_string = False
+        escape_next = False
+        last_valid = 0
+
+        for i, ch in enumerate(text):
+            if escape_next:
+                escape_next = False
+                continue
+            if ch == "\\":
+                escape_next = True
+                continue
+            if ch == '"':
+                in_string = not in_string
+                continue
+            if in_string:
+                continue
+            if ch == "[":
+                bracket_depth += 1
+            elif ch == "]":
+                bracket_depth -= 1
+            elif ch == "{":
+                brace_depth += 1
+            elif ch == "}":
+                brace_depth -= 1
+
+            if bracket_depth == 0 and brace_depth == 0:
+                last_valid = i
+                break
+
+        if bracket_depth > 0 or brace_depth > 0:
+            while bracket_depth > 0:
+                if in_string:
+                    text += '"'
+                    in_string = False
+                text += "]"
+                bracket_depth -= 1
+            while brace_depth > 0:
+                if in_string:
+                    text += '"'
+                    in_string = False
+                text += "}"
+                brace_depth -= 1
+            text = re.sub(r",\s*([}\]])", r"\1", text)
+            logger.warning("Repaired truncated JSON from LLM response")
+        elif last_valid > 0:
+            text = text[: last_valid + 1]
+
+        try:
+            return json.loads(text)
+        except json.JSONDecodeError:
+            pass
+
+        last_complete = text.rfind("},")
+        if last_complete != -1:
+            truncated = text[: last_complete + 1] + "]"
+            truncated = re.sub(r",\s*([}\]])", r"\1", truncated)
+            try:
+                result = json.loads(truncated)
+                logger.warning(
+                    "Recovered %d complete items from truncated JSON", len(result)
+                )
+                return result
+            except json.JSONDecodeError:
+                pass
+
+        last_brace = text.rfind("}")
+        if last_brace != -1:
+            truncated = text[: last_brace + 1]
+            if not truncated.startswith("["):
+                truncated = "[" + truncated + "]"
+            else:
+                truncated += "]"
+            truncated = re.sub(r",\s*([}\]])", r"\1", truncated)
+            try:
+                result = json.loads(truncated)
+                logger.warning(
+                    "Recovered %d items via last-brace fallback", len(result)
+                )
+                return result
+            except json.JSONDecodeError:
+                pass
+
+        logger.error("JSON parse failed after all repair attempts")
+        return []
 
     @staticmethod
     def _normalize_status(raw: str) -> str:
