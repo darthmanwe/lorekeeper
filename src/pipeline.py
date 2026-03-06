@@ -24,6 +24,7 @@ from langgraph.graph import END, StateGraph
 
 from src.extraction import ExtractionPipeline
 from src.guard import BranchManager, ContradictionGuard
+from src.persona import PersonaStore
 from src.prompts import get_prompt
 from src.retrieval import ContextAssembler, CypherRetriever, VectorRetriever, count_tokens
 from src.schema import (
@@ -79,6 +80,7 @@ class StoryPipeline:
         llm: ChatAnthropic,
         guard: ContradictionGuard | None = None,
         branch_manager: BranchManager | None = None,
+        persona_store: PersonaStore | None = None,
     ) -> None:
         self._gc = graph_client
         self._cypher = cypher_retriever
@@ -87,6 +89,7 @@ class StoryPipeline:
         self._llm = llm
         self._guard = guard
         self._branch_mgr = branch_manager
+        self._persona_store = persona_store
         self._graph = self._build_graph()
 
     def _build_graph(self) -> StateGraph:
@@ -100,6 +103,7 @@ class StoryPipeline:
 
         builder.add_node("retrieve_graph", self._node_retrieve_graph)
         builder.add_node("retrieve_vector", self._node_retrieve_vector)
+        builder.add_node("retrieve_personas", self._node_retrieve_personas)
         builder.add_node("assemble_context", self._node_assemble_context)
         builder.add_node("run_guard", self._node_run_guard)
         builder.add_node("generate", self._node_generate)
@@ -108,7 +112,8 @@ class StoryPipeline:
 
         builder.set_entry_point("retrieve_graph")
         builder.add_edge("retrieve_graph", "retrieve_vector")
-        builder.add_edge("retrieve_vector", "assemble_context")
+        builder.add_edge("retrieve_vector", "retrieve_personas")
+        builder.add_edge("retrieve_personas", "assemble_context")
         builder.add_edge("assemble_context", "run_guard")
         builder.add_edge("run_guard", "generate")
         builder.add_edge("generate", "post_generate_check")
@@ -164,6 +169,16 @@ class StoryPipeline:
             "vector_context": context,
             "vector_context_tokens": tokens,
         }
+
+    def _node_retrieve_personas(self, state: PipelineState) -> dict[str, Any]:
+        """Retrieve persona documents for present characters from PersonaStore."""
+        if self._persona_store is None:
+            return {"persona_docs": []}
+
+        session: SessionState = state["session"]
+        docs = self._persona_store.get_personas_for_characters(session.present_characters)
+        logger.info("Persona retrieval: %d docs for %d characters", len(docs), len(session.present_characters))
+        return {"persona_docs": docs}
 
     def _node_assemble_context(self, state: PipelineState) -> dict[str, Any]:
         """Merge all context sources into structured prompt sections."""

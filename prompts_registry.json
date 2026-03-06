@@ -30,6 +30,16 @@
       "eval_run_id": null,
       "promoted_to_main": true,
       "promoted_at": "2026-03-06T00:00:00Z"
+    },
+    {
+      "prompt_id": "persona_generation_v1",
+      "prompt_function": "PersonaGenerator.generate()",
+      "changed_sections": ["initial"],
+      "change_reason": "Persona synthesis prompt — takes character traits, relationships, and event participation from graph; returns structured JSON PersonaDocument with voice_descriptor, emotional_baseline, speech_mannerisms, knowledge_boundaries, alignment_notes",
+      "breaking_change": false,
+      "eval_run_id": null,
+      "promoted_to_main": true,
+      "promoted_at": "2026-03-06T00:00:00Z"
     }
   ]
 }

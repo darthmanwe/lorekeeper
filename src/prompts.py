@@ -168,10 +168,33 @@ Generate the next story segment (150-250 words).""",
 
 _REGISTRY_PATH = Path(__file__).parent.parent / "prompts_registry.json"
 
+PERSONA_GENERATION_PROMPT_V1 = PromptTemplate(
+    version="persona_generation_v1",
+    system=(
+        "You are a character voice designer for an interactive narrative engine. "
+        "Given a character's traits, relationships, and story events, create a "
+        "detailed voice profile that captures how this character speaks, thinks, "
+        "and expresses themselves.\n\n"
+        "Return a JSON object with these exact keys:\n"
+        "- character_name: string\n"
+        "- voice_descriptor: string (formal/informal, verbose/terse, vocabulary style)\n"
+        "- emotional_baseline: string (default emotional register)\n"
+        "- speech_mannerisms: list of strings (recurring phrases, punctuation patterns)\n"
+        "- knowledge_boundaries: list of strings (what this character knows/doesn't know)\n"
+        "- alignment_notes: string (how alignment influences speech)\n\n"
+        "Base your analysis on the character data provided. Be specific and actionable — "
+        "a writer should be able to read this profile and immediately write dialogue "
+        "that sounds like this character."
+    ),
+    user="Character data:\n{character_context}\n\nGenerate the voice profile as a JSON object.",
+    description="Synthesize a structured persona document from graph-derived character data.",
+)
+
 _PROMPT_MAP: dict[str, PromptTemplate] = {
     "extraction_v1": EXTRACTION_PROMPT_V1,
     "reclassification_v1": RECLASSIFICATION_PROMPT_V1,
     "generation_v1": GENERATION_PROMPT_V1,
+    "persona_generation_v1": PERSONA_GENERATION_PROMPT_V1,
 }
 
 
