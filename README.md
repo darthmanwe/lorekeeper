@@ -35,7 +35,7 @@ A few of the bigger decisions behind this design:
 
 ## Evaluation Results
 
-Same player actions, same seed story, 20 segments across a 4-act narrative arc. NKGE vs. a rolling-text baseline that keeps the last 3 segments as context (which is how many production systems actually work, not a strawman).
+Same player actions, same seed story, 20 segments across a 4-act narrative arc. NKGE vs. a rolling-text baseline that keeps the last 3 segments as context. Many production systems for story generation these days utilize rolling text baselines with condensed summaries, so the baseline is representative of operational modes of many AI storytelling companies.
 
 | Metric | Baseline | NKGE | Delta |
 |--------|----------|------|-------|
@@ -51,7 +51,7 @@ Same player actions, same seed story, 20 segments across a 4-act narrative arc. 
 
 The baseline degraded steadily over 20 segments, averaging a contradiction score of 4.35 per segment with 3 Critical failures (dead characters acting, impossible object states). NKGE held at 1.70 mean, with 8 out of 20 segments fully clean. The gap between the two systems widened as the story grew more complex, which is exactly what graph memory is designed to address.
 
-The coherence trade-off is small: -0.20 points. At 5 segments it was -0.60, meaning the system's coherence actually improves relative to baseline as it accumulates more graph context. That's a tunable dial, not a defect.
+The coherence trade-off is small: -0.20 points. At 5 segments it was -0.60, meaning the system's coherence actually improves relative to baseline as it accumulates more graph context. That's a tunable dial that can be adjusted to adjust the system severity, by design.
 
 > Full methodology, severity weights, and reproduction steps are in the [design document](./NKGE_Project_Design_Document.md).
 
