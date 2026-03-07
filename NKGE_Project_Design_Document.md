@@ -509,9 +509,9 @@ model places her in the tavern.
 
 Pick the clearest example from `04_eval_harness.ipynb` cell 6 (highest-contradiction baseline segment). The example should involve a **Critical severity** contradiction for maximum impact.
 
-### 9.5 Architecture Diagram (generate during P3)
+### 9.5 Architecture Diagram
 
-Generate a Mermaid diagram from the data flow in Section 3.2 and embed directly in the README:
+Mermaid diagram draft from the data flow in Section 3.2 and to be embedded directly in the README.
 
 ```mermaid
 flowchart TD
