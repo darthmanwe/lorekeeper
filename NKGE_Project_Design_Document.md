@@ -27,9 +27,9 @@
 
 This document specifies the architecture, implementation plan, and evaluation strategy for the **Narrative Knowledge Graph Engine (Lorekeeper / LKGE)** — an agentic interactive storytelling system that uses a live Neo4j knowledge graph as the memory and consistency backbone for LLM-powered narrative generation.
 
-The system is directly analogous to production graph-RAG platforms such as data2.ai's reView product, applying identical retrieval and governance patterns to creative narrative rather than document intelligence. Every segment generated is grounded in a continuously updated graph of characters, locations, events, and causal chains — eliminating contradiction and enabling true narrative persistence across long story arcs.
+The system is directly analogous to production graph-RAG platforms, applying identical retrieval and governance patterns to creative narrative rather than document intelligence. Every segment generated is grounded in a continuously updated graph of characters, locations, events, and causal chains, specifically designed for eliminating contradiction and enabling true narrative persistence across long story arcs.
 
-> **Portfolio Goal:** This project demonstrates end-to-end applied ML engineering: extraction pipelines, dual-mode RAG retrieval, contradiction detection, graph governance, and a rigorous evaluation harness. It directly closes the evaluation gap in the existing project portfolio and provides a concrete, working artifact to discuss with data2.ai and similar employers.
+
 
 ---
 
@@ -166,7 +166,7 @@ A deterministic Python validator checks the proposal before any MERGE executes:
 - **Status consistency:** a dead character cannot be set to alive without an explicit resurrection event in the same segment
 - **Relationship directionality:** `CAUSED_BY` requires both Event nodes to exist before the relationship is created
 
-> **Human-in-the-Loop Mode:** In notebook mode (development), flagged items surface as an approval widget before commit. In API mode, they are queued in a review table with a 30-second auto-timeout defaulting to commit. This mirrors data2.ai's propose-approve-commit governance pattern.
+> **Human-in-the-Loop Mode:** In notebook mode (development), flagged items surface as an approval widget before commit. In API mode, they are queued in a review table with a 30-second auto-timeout defaulting to commit. This mirrors propose-approve-commit governance pattern that serves to reduce AI hallucination artifacts.
 
 ---
 
@@ -424,7 +424,7 @@ Branch count is capped at **5 per story session**. When the cap is reached, the 
 
 ## 9. README Construction Guide
 
-> This section defines exactly what to build the public README from, and in what order, once the project is complete. The README is a portfolio artifact and should be assembled with the same care as the system itself.
+> This section defines exactly what to build the public README from, and in what order, once the project is complete.
 
 ### 9.1 README Section Order
 
