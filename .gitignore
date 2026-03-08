@@ -31,3 +31,9 @@ study_packet.md
 /chroma_store_p5_test/
 /chroma_store_p4_test/
 /.cursor/
+/.idea/.gitignore
+/.idea/lorekeeper.iml
+/.idea/misc.xml
+/.idea/modules.xml
+/.idea/inspectionProfiles/profiles_settings.xml
+/.idea/vcs.xml
